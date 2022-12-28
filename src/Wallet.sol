@@ -11,7 +11,7 @@ contract Wallet {
 
     address payable public owner;
     string public username;
-    uint256 public balance;                                 // Revisar si es necesario este balance, ya que es para ETH
+    uint256 public balance;                              // Revisar si es necesario este balance, ya que es para ETH
     mapping(address => uint) public tokenBalances;
 
     constructor(string memory _username) {
@@ -32,32 +32,33 @@ contract Wallet {
     }
 
     function withdraw(address _token, uint256 _amount) public {
-    if (_token == address(0)) {
-        // Withdrawing ETH
-        require(balance >= _amount, "Insufficient ETH balance");
-        balance = balance.sub(_amount);
-        payable(msg.sender).transfer(_amount);
-    } else {
-        // Withdrawing ERC-20 token
-        require(tokenBalances[_token] >= _amount, "Insufficient token balance");
-        ERC20(_token).transfer(msg.sender, _amount);
-        tokenBalances[_token] = tokenBalances[_token].sub(_amount);
+        require(msg.sender == owner, "Only owner can withdraw funds");
+        if (_token == address(0)) {
+            // Withdrawing ETH
+            require(balance >= _amount, "Insufficient ETH balance");
+            balance = balance.sub(_amount);
+            payable(msg.sender).transfer(_amount);
+        } else {
+            // Withdrawing ERC-20 token
+            require(tokenBalances[_token] >= _amount, "Insufficient token balance");
+            ERC20(_token).transfer(msg.sender, _amount);
+            tokenBalances[_token] = tokenBalances[_token].sub(_amount);
+        }
     }
-}
 
     function transfer(address _to, address _token, uint256 _amount) public {
-    if (_token == address(0)) {
-        // Transferring ETH
-        require(balance >= _amount, "Insufficient ETH balance");
-        balance = balance.sub(_amount);
-        payable(_to).transfer(_amount);
-    } else {
-        // Transferring ERC-20 token
-        require(tokenBalances[_token] >= _amount, "Insufficient token balance");
-        ERC20(_token).transfer(_to, _amount);
-        tokenBalances[_token] = tokenBalances[_token].sub(_amount);
+        if (_token == address(0)) {
+            // Transferring ETH
+            require(balance >= _amount, "Insufficient ETH balance");
+            balance = balance.sub(_amount);
+            payable(_to).transfer(_amount);
+        } else {
+            // Transferring ERC-20 token
+            require(tokenBalances[_token] >= _amount, "Insufficient token balance");
+            ERC20(_token).transfer(_to, _amount);
+            tokenBalances[_token] = tokenBalances[_token].sub(_amount);
+        }
     }
-}
 
     function getBalance(address _token) public view returns (uint256) {
         if (_token == address(0)) {
