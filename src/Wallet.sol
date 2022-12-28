@@ -1,70 +1,73 @@
+// SPDX-License-Identifier: GNU General Public License v3.0
 pragma solidity ^0.8.0;
 
+import "openzeppelin-contracts/utils/math/SafeMath.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/token/ERC20/ERC20.sol";
+
 contract Wallet {
-    address public owner;
-    mapping(address => uint) public balance;
-    mapping(string => address) public usernameToAddress;
-    mapping(address => string) public addressToUsername;
+    using SafeMath for uint256;
+    using SafeERC20 for ERC20;
 
-    constructor() public {
-        owner = msg.sender;
-        balance[owner] = 1000000;
+    address payable public owner;
+    string public username;
+    uint256 public balance;                                 // Revisar si es necesario este balance, ya que es para ETH
+    mapping(address => uint) public tokenBalances;
+
+    constructor(string memory _username) {
+        owner = payable(msg.sender);
+        username = _username;
     }
 
-    function claimUsername(string memory _username) public {
-        require(usernameToAddress[_username] == address(0), "Username is already claimed");
-        usernameToAddress[_username] = msg.sender;
-        addressToUsername[msg.sender] = _username;
+    function deposit(address _token, uint256 _amount) public payable {
+        if (_token == address(0)) {
+            // Depositing ETH
+            require(msg.value == _amount, "Incorrect amount sent");
+            balance = balance.add(_amount);
+        } else {
+            // Depositing ERC-20 token
+            ERC20(_token).transferFrom(msg.sender, address(this), _amount);
+            tokenBalances[_token] = tokenBalances[_token].add(_amount);
+        }
     }
 
-    function deposit() public payable {
-        require(msg.value > 0, "Cannot deposit 0 or less Ether");
-        balance[msg.sender] += msg.value;
-    }
-
-    function withdraw(uint amount) public {
-        require(amount > 0, "Cannot withdraw 0 or less Ether");
-        require(balance[msg.sender] >= amount, "Insufficient balance");
-        balance[msg.sender] -= amount;
-        msg.sender.transfer(amount);
-    }
-
-    function transfer(address recipient, uint amount) public {
-        require(amount > 0, "Cannot transfer 0 or less Ether");
-        require(balance[msg.sender] >= amount, "Insufficient balance");
-        balance[msg.sender] -= amount;
-        balance[recipient] += amount;
-    }
-
-    function getBalance() public view returns (uint) {
-        return balance[msg.sender];
+    function withdraw(address _token, uint256 _amount) public {
+    if (_token == address(0)) {
+        // Withdrawing ETH
+        require(balance >= _amount, "Insufficient ETH balance");
+        balance = balance.sub(_amount);
+        payable(msg.sender).transfer(_amount);
+    } else {
+        // Withdrawing ERC-20 token
+        require(tokenBalances[_token] >= _amount, "Insufficient token balance");
+        ERC20(_token).transfer(msg.sender, _amount);
+        tokenBalances[_token] = tokenBalances[_token].sub(_amount);
     }
 }
 
-contract AbstractedWallet is Wallet {
-    address public abstractedAccount;
+    function transfer(address _to, address _token, uint256 _amount) public {
+    if (_token == address(0)) {
+        // Transferring ETH
+        require(balance >= _amount, "Insufficient ETH balance");
+        balance = balance.sub(_amount);
+        payable(_to).transfer(_amount);
+    } else {
+        // Transferring ERC-20 token
+        require(tokenBalances[_token] >= _amount, "Insufficient token balance");
+        ERC20(_token).transfer(_to, _amount);
+        tokenBalances[_token] = tokenBalances[_token].sub(_amount);
+    }
+}
 
-    constructor(address _abstractedAccount) public {
-        abstractedAccount = _abstractedAccount;
+    function getBalance(address _token) public view returns (uint256) {
+        if (_token == address(0)) {
+            // Returning balance of ETH
+            return balance;
+        } else {
+            // Returning balance of ERC-20 token
+            return tokenBalances[_token];
+        }
     }
 
-    function deposit() public override payable {
-        abstractedAccount.transfer(msg.value);
-    }
-
-    function withdraw(uint amount) public override {
-        require(abstractedAccount.call.value(amount)(""), "Withdrawal failed");
-        balance[msg.sender] += amount;
-    }
-
-    function transfer(address recipient, uint amount) public override {
-        require(abstractedAccount.call.value(amount)(abi.encodePacked(recipient)), "Transfer failed");
-        balance[recipient] += amount;
-    }
-
-    function getBalance() public view override returns (uint) {
-        (bool success, uint balance) = abstractedAccount.call("", "balanceOf", this);
-        require(success, "Failed to get balance");
-        return balance;
-    }
+    receive() external payable {}
 }
